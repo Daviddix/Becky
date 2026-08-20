@@ -7,7 +7,7 @@
     "shared"
   ],
   "dependencies": {
-    "mongoose": "^8.0.0",
+    "mongoose": "^9.9.3",
     "dotenv": "^16.4.5"
   }
 }

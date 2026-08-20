@@ -1,14 +1,12 @@
 import 'dotenv/config';
 import { Bot, InlineKeyboardBuilder } from "node-telegram-bot-api";
-import { fromPath } from "node-telegram-bot-api/node";
 import mongoose from 'mongoose';
 import { User } from '@scholarship-pilot/shared';
 import { extractAcademicDetails, generateFormAnswers } from './utils/gemini.utils.js';
-import {fillFormAndScreenshot} from "./utils/playwright.util.js"
 import { inspectScholarshipPage } from './services/scraper.service.js';
 
 // 1. Initialize Telegram Bot
-const token = process.env.TELEGRAM_TOKEN;
+const token = process.env.TELEGRAM_TOKEN; 
 const bot = new Bot(token);
 
 bot.on('message', async (ctx) => {
@@ -79,42 +77,57 @@ bot.on('message', async (ctx) => {
     await user.save();
     await ctx.reply("🔍 Link detected! Inspecting the application form...");
 
-    try {
-      // 1. Scrape the empty form
-      const scrapedData = await inspectScholarshipPage(url);
-      await ctx.reply(`📄 Found ${scrapedData.fields.length} fields. Drafting answers with Gemini...`);
+   try {
+  // 1. Create the initial Application record in MongoDB
+  const appRecord = await Application.create({
+    userId: user._id,
+    chatId: user.chatId,
+    scholarshipUrl: url,
+    status: 'SCRAPING'
+  });
 
-      // 2. Synthesize answers
-      const answers = await generateFormAnswers(user.vault, scrapedData.fields);
-      await ctx.reply("✍️ Answers drafted! Injecting them into the browser...");
+  // 2. Scrape the empty form
+  const scrapedData = await inspectScholarshipPage(url);
+  await ctx.reply(`📄 Found ${scrapedData.fields.length} fields. Drafting answers with Gemini...`);
 
-      // 3. Inject and capture Ghost View
-      const imagePath = await fillFormAndScreenshot(url, answers);
+  // 3. Synthesize answers
+  const answers = await generateFormAnswers(user.vault, scrapedData.fields);
+  
+  // 4. Merge the Gemini answers back into the form fields array
+  const filledFields = scrapedData.fields.map(field => ({
+    ...field,
+    value: answers[field.name] || '' // Attach the drafted text to the specific field
+  }));
 
-      // 4. Update Database
-      user.sessionState = 'NEEDS_REVIEW';
-      await user.save();
+  // 5. Update the Database with the final drafts
+  appRecord.formFields = filledFields;
+  appRecord.status = 'NEEDS_REVIEW';
+  await appRecord.save();
+  
+  user.sessionState = 'NEEDS_REVIEW';
+  await user.save();
 
-      // 5. Send Screenshot with Approval Buttons
-      await bot.api.sendPhoto({
-        chat_id: user.chatId,
-        photo: await fromPath(imagePath),
-        caption: "✅ **Ghost View Ready!**\n\nI have filled the form based on your Vault. Please review the screenshot above.\n\nShould I submit this application?",
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "✅ Approve & Submit", callback_data: `submit_app` }],
-            [{ text: "❌ Cancel", callback_data: `cancel_app` }]
-          ]
-        }
-      });
+  const baseUrl = process.env.NEXTJS_BASE_URL || 'http://localhost:3000';
+  const reviewUrl = `${baseUrl}/review/${appRecord._id}`;
 
-    } catch (err) {
-      console.error('Pipeline error:', err);
-      user.sessionState = 'IDLE';
-      await user.save();
-      await ctx.reply("⚠️ Something went wrong while processing that link. Please try another one.");
+  await ctx.reply(
+    "✅ **Draft Complete!**\n\nI have prepared your application based on your Vault. Tap the button below to review, edit, and approve the final text.",
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📱 Open Live Preview", web_app: { url: reviewUrl } }]
+        ]
+      }
     }
+  );
+
+} catch (err) {
+  console.error('Pipeline error:', err);
+  user.sessionState = 'IDLE';
+  await user.save();
+  await ctx.reply("⚠️ Something went wrong while processing that link. Please try another one.");
+}
     return;
   }
   return ctx.reply("Send me a valid scholarship link to start applying!");
