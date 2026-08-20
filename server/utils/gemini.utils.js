@@ -53,4 +53,6 @@ Return ONLY a valid JSON object where the keys are the exact field "name" attrib
   return JSON.parse(response.text);
 }
 
+
+
 export { extractAcademicDetails, generateFormAnswers }; 

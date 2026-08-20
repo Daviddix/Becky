@@ -1,9 +1,9 @@
 import 'dotenv/config';
-import { Bot, InlineKeyboardBuilder } from "node-telegram-bot-api";
+import { Bot } from "node-telegram-bot-api";
 import mongoose from 'mongoose';
-import { User, Application } from '@scholarship-pilot/shared';
-import { extractAcademicDetails, generateFormAnswers } from './utils/gemini.utils.js';
-import { inspectScholarshipPage } from './services/scraper.service.js';
+import { User } from '@scholarship-pilot/shared';
+import { extractAcademicDetails } from '../server/utils/gemini.utils.js';
+
 
 // 1. Initialize Telegram Bot
 const token = process.env.TELEGRAM_TOKEN;
@@ -20,15 +20,15 @@ bot.on('message', async (ctx) => {
     let user = await User.findOne({ chatId });
 
     if (!user) {
-  user = await User.create({ 
-    chatId, 
-    sessionState: 'NEW_USER',
-    vault: {
-      firstName: ctx.from?.first_name || '',
-      lastName: ctx.from?.last_name || ''
+      user = await User.create({
+        chatId,
+        sessionState: 'NEW_USER',
+        vault: {
+          firstName: ctx.from?.first_name || '',
+          lastName: ctx.from?.last_name || ''
+        }
+      });
     }
-  });
-}
 
     // 2. Handle /start command from any state
     if (text === '/start') {
@@ -82,61 +82,48 @@ bot.on('message', async (ctx) => {
 
           user.sessionState = 'PROCESSING_LINK';
           await user.save();
-          await ctx.reply("🔍 Link detected! Inspecting the application form...");
+
+          await ctx.reply("🔍 Link detected! Sending to the main server for AI inspection...");
 
           try {
-            // 1. Create the initial Application record in MongoDB
-            const appRecord = await Application.create({
-              userId: user._id,
-              chatId: user.chatId,
-              scholarshipUrl: url,
-              status: 'SCRAPING'
+            // 1. Tell the server to do the heavy scraping
+            const serverResponse = await fetch('http://localhost:4000/api/scrape', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: user._id,
+                chatId: user.chatId,
+                url: url
+              })
             });
 
-            // 2. Scrape the empty form
-            const scrapedData = await inspectScholarshipPage(url);
-            await ctx.reply(`📄 Found ${scrapedData.fields.length} fields. Drafting answers with Gemini...`);
+            const data = await serverResponse.json();
 
-            // 3. Synthesize answers
-            const answers = await generateFormAnswers(user.vault, scrapedData.fields);
+            if (!serverResponse.ok) throw new Error(data.error);
 
-            // 4. Merge the Gemini answers back into the form fields array
-            const filledFields = scrapedData.fields.map(field => ({
-              ...field,
-              value: answers[field.name] || '' // Attach the drafted text to the specific field
-            }));
-
-            // 5. Update the Database with the final drafts
-            appRecord.formFields = filledFields;
-            appRecord.status = 'NEEDS_REVIEW';
-            await appRecord.save();
-
-            user.sessionState = 'NEEDS_REVIEW';
-            await user.save();
-
+            // 2. Server finished! Send the Next.js Mini App button
             const baseUrl = process.env.NEXTJS_BASE_URL || 'http://localhost:3000';
-            const reviewUrl = `${baseUrl}/review/${appRecord._id}`;
+            const reviewUrl = `${baseUrl}/review/${data.applicationId}`;
 
             await ctx.reply(
-              "✅ **Draft Complete!**\n\nI have prepared your application based on your Vault. Tap the button below to review, edit, and approve the final text.",
+              "✅ **Draft Complete!**\n\nI have prepared your application based on your Vault. Tap the button below to review and edit.",
               {
                 parse_mode: 'Markdown',
                 reply_markup: {
-                  inline_keyboard: [
-                    [{ text: "📱 Open Live Preview", web_app: { url: reviewUrl } }]
-                  ]
+                  inline_keyboard: [[{ text: "📱 Open Live Preview", web_app: { url: reviewUrl } }]]
                 }
               }
             );
 
           } catch (err) {
-            console.error('Pipeline error:', err);
+            console.error('Server connection error:', err);
             user.sessionState = 'IDLE';
             await user.save();
-            await ctx.reply("⚠️ Something went wrong while processing that link. Please try another one.");
+            await ctx.reply("⚠️ The server encountered an error processing that link.");
           }
           return;
         }
+
         return ctx.reply("Send me a valid scholarship link to start applying!");
       }
 

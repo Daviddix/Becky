@@ -4,7 +4,8 @@
   "workspaces": [
     "telegram",
     "miniApp",
-    "shared"
+    "shared",
+    "server"
   ],
   "dependencies": {
     "mongoose": "^9.9.3",
