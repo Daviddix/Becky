@@ -19,12 +19,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  // MongoDB ObjectIds can't be passed directly to Client Components in Next.js, so we convert it to a string
-  const serializedData = {
-    ...appRecord,
-    _id: appRecord._id.toString(),
-    userId: appRecord.userId.toString()
-  };
+  // JSON round-trip strips all MongoDB ObjectIds and special types
+  const serializedData = JSON.parse(JSON.stringify(appRecord));
 
   return <ReviewForm initialData={serializedData} />;
 }

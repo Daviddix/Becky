@@ -7,6 +7,7 @@ import { extractAcademicDetails } from '../server/utils/gemini.utils.js';
 
 // 1. Initialize Telegram Bot
 const token = process.env.TELEGRAM_TOKEN;
+const BACKEND_URL = process.env.BACKEND_URL;
 const bot = new Bot(token);
 
 bot.on('message', async (ctx) => {
@@ -87,7 +88,7 @@ bot.on('message', async (ctx) => {
 
           try {
             // 1. Tell the server to do the heavy scraping
-            const serverResponse = await fetch('http://localhost:4000/api/scrape', {
+            const serverResponse = await fetch(`${BACKEND_URL}/api/scrape`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

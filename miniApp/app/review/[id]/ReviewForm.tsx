@@ -26,8 +26,11 @@ interface ReviewFormProps {
 
 export default function ReviewForm({ initialData }: ReviewFormProps) {
   const [formData, setFormData] = useState<ApplicationData>(initialData);
+  const [hydrated, setHydrated] = useState(false);
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
+    setHydrated(true);
     // Add safety check for the Telegram Web App object
     if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
       const tg = (window as any).Telegram.WebApp;
@@ -36,31 +39,41 @@ export default function ReviewForm({ initialData }: ReviewFormProps) {
     }
   }, []);
 
- const handleApprove = async () => {
-  // Send the finalized data back to your Node backend
-  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/submit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(formData)
-  });
+  const handleApprove = async () => {
+    setStatus('Submitting...');
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      setStatus(`Done! Status: ${res.status}`);
 
-  if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
-    (window as any).Telegram.WebApp.close();
-  }
-};
+      if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+        (window as any).Telegram.WebApp.close();
+      }
+    } catch (err: any) {
+      setStatus(`Error: ${err.message}`);
+      console.log(err)
+    }
+  };
 
   const handleFieldChange = (index: number, newValue: string) => {
-  const updatedFields = [...formData.formFields];
-  updatedFields[index].value = newValue;
-  setFormData({ ...formData, formFields: updatedFields });
-};
+    const updatedFields = [...formData.formFields];
+    updatedFields[index].value = newValue;
+    setFormData({ ...formData, formFields: updatedFields });
+  };
 
   return (
     <main className={styles.container}>
       <h1 className={styles.header}>Review Application</h1>
+      <p style={{ color: hydrated ? 'green' : 'red', fontWeight: 'bold' }}>
+        {hydrated ? '✅ React is active' : '❌ Not hydrated'}
+      </p>
+      {status && <p style={{ color: 'blue', fontWeight: 'bold' }}>{status}</p>}
 
-      <form className={styles.formGroup}>
-        {formData.formFields?.map((field, index) => (
+      <form className={styles.formGroup} onSubmit={(e) => e.preventDefault()}>
+        {formData.formFields?.map((field: FormField, index: number) => (
           <div key={index} className={styles.formGroup}>
             <label className={styles.label}>{field.label}</label>
             {field.type === 'textarea' ? (
@@ -72,23 +85,23 @@ export default function ReviewForm({ initialData }: ReviewFormProps) {
               />
             ) : (
               <input 
-  type={field.type}
-  className={styles.textarea} 
-  value={field.value} // Change defaultValue to value
-  onChange={(e) => handleFieldChange(index, e.target.value)} 
-/>
+                type={field.type}
+                className={styles.textarea} 
+                value={field.value}
+                onChange={(e) => handleFieldChange(index, e.target.value)} 
+              />
             )}
           </div>
         ))}
-
-        <button
-          type="button"
-          className={styles.submitButton}
-          onClick={handleApprove}
-        >
-          Approve & Submit
-        </button>
       </form>
+
+      <button
+        type="button"
+        className={styles.submitButton}
+        onClick={handleApprove}
+      >
+        Approve & Submit
+      </button>
     </main>
   );
 }

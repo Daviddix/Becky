@@ -45,3 +45,56 @@ export async function inspectScholarshipPage(url) {
     throw error;
   }
 }
+
+export async function injectAndSubmit(url, formFields) {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  const screenshotPath = `./success_${Date.now()}.png`;
+
+  try {
+    // 1. Navigate to the scholarship portal
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // 2. Inject the approved text into the corresponding DOM elements
+    for (const field of formFields) {
+      if (!field.name || !field.value) continue;
+
+      try {
+        // We use the exact name attribute Playwright scraped initially
+        const selector = `[name="${field.name}"]`;
+        await page.waitForSelector(selector, { state: 'visible', timeout: 2000 });
+        
+        if (field.type === 'radio' || field.type === 'checkbox') {
+          await page.check(selector);
+        } else {
+          await page.fill(selector, field.value);
+        }
+      } catch (err) {
+        console.log(`⚠️ Could not fill field: ${field.name}`);
+      }
+    }
+
+    // 3. Find and click the Submit button
+    // This uses a combined selector to find common submit buttons
+    const submitSelector = 'button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")';
+    
+    await page.waitForSelector(submitSelector, { state: 'visible', timeout: 5000 });
+    
+    // Click it and wait for the page to navigate to the "Thank You" screen
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }).catch(() => {}),
+      page.click(submitSelector)
+    ]);
+
+    // 4. Take a screenshot of the confirmation page as proof
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+
+    await browser.close();
+    return { success: true, proofImage: screenshotPath };
+
+  } catch (error) {
+    await browser.close();
+    console.error('Injection failed:', error);
+    throw new Error('Failed to submit the form.');
+  }
+}

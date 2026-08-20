@@ -6,12 +6,13 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
-    "express": "^4.19.0",
+    "@google/genai": "^2.18.0",
+    "@scholarship-pilot/shared": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "playwright": "^1.41.0",
-    "@google/genai": "^0.1.1",
-    "@scholarship-pilot/shared": "*"
+    "express": "^4.19.0",
+    "node-telegram-bot-api": "^2.0.0",
+    "playwright": "^1.41.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
