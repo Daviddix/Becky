@@ -11,6 +11,11 @@ const userSchema = new mongoose.Schema({
     enum: ['NEW_USER', 'AWAITING_BIO', 'IDLE', 'PROCESSING_LINK', 'NEEDS_REVIEW', 'AWAITING_APPROVAL'],
     default: 'NEW_USER'
   },
+  firstName: { type: String, default: '' },
+  lastName: { type: String, default: '' },
+  email: { type: String, default: '' },
+  phone: { type: String, default: '' },
+  university: { type: String, default: null },
   vault: {
     university: { type: String, default: null },
     major: { type: String, default: null },

@@ -1,12 +1,12 @@
 import 'dotenv/config';
 import { Bot, InlineKeyboardBuilder } from "node-telegram-bot-api";
 import mongoose from 'mongoose';
-import { User } from '@scholarship-pilot/shared';
+import { User, Application } from '@scholarship-pilot/shared';
 import { extractAcademicDetails, generateFormAnswers } from './utils/gemini.utils.js';
 import { inspectScholarshipPage } from './services/scraper.service.js';
 
 // 1. Initialize Telegram Bot
-const token = process.env.TELEGRAM_TOKEN; 
+const token = process.env.TELEGRAM_TOKEN;
 const bot = new Bot(token);
 
 bot.on('message', async (ctx) => {
@@ -20,8 +20,15 @@ bot.on('message', async (ctx) => {
     let user = await User.findOne({ chatId });
 
     if (!user) {
-      user = await User.create({ chatId, sessionState: 'NEW_USER' });
+  user = await User.create({ 
+    chatId, 
+    sessionState: 'NEW_USER',
+    vault: {
+      firstName: ctx.from?.first_name || '',
+      lastName: ctx.from?.last_name || ''
     }
+  });
+}
 
     // 2. Handle /start command from any state
     if (text === '/start') {
@@ -68,70 +75,70 @@ bot.on('message', async (ctx) => {
       }
 
       case 'IDLE': {
-  const isUrl = /https?:\/\/[^\s]+/.test(text);
+        const isUrl = /https?:\/\/[^\s]+/.test(text);
 
-  if (isUrl) {
-    const url = text.match(/https?:\/\/[^\s]+/)[0];
+        if (isUrl) {
+          const url = text.match(/https?:\/\/[^\s]+/)[0];
 
-    user.sessionState = 'PROCESSING_LINK';
-    await user.save();
-    await ctx.reply("🔍 Link detected! Inspecting the application form...");
+          user.sessionState = 'PROCESSING_LINK';
+          await user.save();
+          await ctx.reply("🔍 Link detected! Inspecting the application form...");
 
-   try {
-  // 1. Create the initial Application record in MongoDB
-  const appRecord = await Application.create({
-    userId: user._id,
-    chatId: user.chatId,
-    scholarshipUrl: url,
-    status: 'SCRAPING'
-  });
+          try {
+            // 1. Create the initial Application record in MongoDB
+            const appRecord = await Application.create({
+              userId: user._id,
+              chatId: user.chatId,
+              scholarshipUrl: url,
+              status: 'SCRAPING'
+            });
 
-  // 2. Scrape the empty form
-  const scrapedData = await inspectScholarshipPage(url);
-  await ctx.reply(`📄 Found ${scrapedData.fields.length} fields. Drafting answers with Gemini...`);
+            // 2. Scrape the empty form
+            const scrapedData = await inspectScholarshipPage(url);
+            await ctx.reply(`📄 Found ${scrapedData.fields.length} fields. Drafting answers with Gemini...`);
 
-  // 3. Synthesize answers
-  const answers = await generateFormAnswers(user.vault, scrapedData.fields);
-  
-  // 4. Merge the Gemini answers back into the form fields array
-  const filledFields = scrapedData.fields.map(field => ({
-    ...field,
-    value: answers[field.name] || '' // Attach the drafted text to the specific field
-  }));
+            // 3. Synthesize answers
+            const answers = await generateFormAnswers(user.vault, scrapedData.fields);
 
-  // 5. Update the Database with the final drafts
-  appRecord.formFields = filledFields;
-  appRecord.status = 'NEEDS_REVIEW';
-  await appRecord.save();
-  
-  user.sessionState = 'NEEDS_REVIEW';
-  await user.save();
+            // 4. Merge the Gemini answers back into the form fields array
+            const filledFields = scrapedData.fields.map(field => ({
+              ...field,
+              value: answers[field.name] || '' // Attach the drafted text to the specific field
+            }));
 
-  const baseUrl = process.env.NEXTJS_BASE_URL || 'http://localhost:3000';
-  const reviewUrl = `${baseUrl}/review/${appRecord._id}`;
+            // 5. Update the Database with the final drafts
+            appRecord.formFields = filledFields;
+            appRecord.status = 'NEEDS_REVIEW';
+            await appRecord.save();
 
-  await ctx.reply(
-    "✅ **Draft Complete!**\n\nI have prepared your application based on your Vault. Tap the button below to review, edit, and approve the final text.",
-    {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "📱 Open Live Preview", web_app: { url: reviewUrl } }]
-        ]
+            user.sessionState = 'NEEDS_REVIEW';
+            await user.save();
+
+            const baseUrl = process.env.NEXTJS_BASE_URL || 'http://localhost:3000';
+            const reviewUrl = `${baseUrl}/review/${appRecord._id}`;
+
+            await ctx.reply(
+              "✅ **Draft Complete!**\n\nI have prepared your application based on your Vault. Tap the button below to review, edit, and approve the final text.",
+              {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: "📱 Open Live Preview", web_app: { url: reviewUrl } }]
+                  ]
+                }
+              }
+            );
+
+          } catch (err) {
+            console.error('Pipeline error:', err);
+            user.sessionState = 'IDLE';
+            await user.save();
+            await ctx.reply("⚠️ Something went wrong while processing that link. Please try another one.");
+          }
+          return;
+        }
+        return ctx.reply("Send me a valid scholarship link to start applying!");
       }
-    }
-  );
-
-} catch (err) {
-  console.error('Pipeline error:', err);
-  user.sessionState = 'IDLE';
-  await user.save();
-  await ctx.reply("⚠️ Something went wrong while processing that link. Please try another one.");
-}
-    return;
-  }
-  return ctx.reply("Send me a valid scholarship link to start applying!");
-}
 
       default:
         return ctx.reply("I received your message. Send a scholarship URL to get started.");
@@ -144,7 +151,7 @@ bot.on('message', async (ctx) => {
 
 bot.startPolling()
   .then(() => console.log('Scholarship Pilot Bot is polling...'))
-  .catch(err => console.error('Bot polling error:', err)); 
+  .catch(err => console.error('Bot polling error:', err));
 
 
 mongoose.connect(process.env.MONGODB_URI)

@@ -36,39 +36,53 @@ export default function ReviewForm({ initialData }: ReviewFormProps) {
     }
   }, []);
 
-  const handleApprove = () => {
-    console.log("Submitting:", formData);
-    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
-      (window as any).Telegram.WebApp.close();
-    }
-  };
+ const handleApprove = async () => {
+  // Send the finalized data back to your Node backend
+  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(formData)
+  });
+
+  if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+    (window as any).Telegram.WebApp.close();
+  }
+};
+
+  const handleFieldChange = (index: number, newValue: string) => {
+  const updatedFields = [...formData.formFields];
+  updatedFields[index].value = newValue;
+  setFormData({ ...formData, formFields: updatedFields });
+};
 
   return (
     <main className={styles.container}>
       <h1 className={styles.header}>Review Application</h1>
-      
+
       <form className={styles.formGroup}>
         {formData.formFields?.map((field, index) => (
           <div key={index} className={styles.formGroup}>
             <label className={styles.label}>{field.label}</label>
             {field.type === 'textarea' ? (
-              <textarea 
-                className={styles.textarea} 
-                defaultValue={field.value} 
+              <textarea
+                className={styles.textarea}
+                defaultValue={field.value}
                 rows={6}
+                onChange={(e) => handleFieldChange(index, e.target.value)} 
               />
             ) : (
               <input 
-                type="text"
-                className={styles.textarea} 
-                defaultValue={field.value} 
-              />
+  type={field.type}
+  className={styles.textarea} 
+  value={field.value} // Change defaultValue to value
+  onChange={(e) => handleFieldChange(index, e.target.value)} 
+/>
             )}
           </div>
         ))}
-        
-        <button 
-          type="button" 
+
+        <button
+          type="button"
           className={styles.submitButton}
           onClick={handleApprove}
         >
