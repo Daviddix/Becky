@@ -2,12 +2,10 @@ import 'dotenv/config';
 import { Bot, InlineKeyboardBuilder } from "node-telegram-bot-api";
 import { fromPath } from "node-telegram-bot-api/node";
 import mongoose from 'mongoose';
-import { GoogleGenAI } from '@google/genai';
-import { User } from './models/Users.models.js';
+import { User } from '@scholarship-pilot/shared';
 import { extractAcademicDetails, generateFormAnswers } from './utils/gemini.utils.js';
 import {fillFormAndScreenshot} from "./utils/playwright.util.js"
 import { inspectScholarshipPage } from './services/scraper.service.js';
-import { Application } from './models/Applications.models.js';
 
 // 1. Initialize Telegram Bot
 const token = process.env.TELEGRAM_TOKEN;
