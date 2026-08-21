@@ -44,7 +44,10 @@ export default function ReviewForm({ initialData }: ReviewFormProps) {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify(formData)
       });
       setStatus(`Done! Status: ${res.status}`);
@@ -81,14 +84,14 @@ export default function ReviewForm({ initialData }: ReviewFormProps) {
                 className={styles.textarea}
                 defaultValue={field.value}
                 rows={6}
-                onChange={(e) => handleFieldChange(index, e.target.value)} 
+                onChange={(e) => handleFieldChange(index, e.target.value)}
               />
             ) : (
-              <input 
+              <input
                 type={field.type}
-                className={styles.textarea} 
+                className={styles.textarea}
                 value={field.value}
-                onChange={(e) => handleFieldChange(index, e.target.value)} 
+                onChange={(e) => handleFieldChange(index, e.target.value)}
               />
             )}
           </div>

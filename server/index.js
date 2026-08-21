@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { Bot } from "node-telegram-bot-api";
+import TelegramBot from "node-telegram-bot-api";
 import mongoose from 'mongoose';
 import { User, Application } from '@scholarship-pilot/shared';
 import { inspectScholarshipPage, injectAndSubmit } from './services/scraper.service.js';
@@ -9,8 +9,9 @@ import { generateFormAnswers } from './utils/gemini.utils.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const token = process.env.TELEGRAM_TOKEN;
-const bot = new Bot(token);
+const token = process.env.TELEGRAM_TOKEN; 
+// We set polling to false because the Next.js server only needs to SEND messages, not receive them.
+const bot = new TelegramBot(token, { polling: false });
 
 app.use(cors());
 app.use(express.json());
@@ -48,7 +49,7 @@ app.post('/api/submit', async (req, res) => {
 
     injectAndSubmit(appRecord.scholarshipUrl, formFields)
       .then(async (result) => {
-        appRecord.status = 'COMPLETED';
+        appRecord.status = 'SUBMITTED';
         await appRecord.save();
         
         user.sessionState = 'IDLE';
@@ -122,6 +123,20 @@ app.post('/api/scrape', async (req, res) => {
   } catch (error) {
     console.error('Scraping Error:', error);
     res.status(500).json({ error: 'Failed to process link' });
+  }
+});
+
+// GET endpoint to fetch application data for the frontend
+app.get('/api/application/:id', async (req, res) => {
+  try {
+    const appRecord = await Application.findById(req.params.id).lean();
+    if (!appRecord) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.status(200).json(appRecord);
+  } catch (error) {
+    console.error('Fetch Error:', error);
+    res.status(500).json({ error: 'Failed to fetch application' });
   }
 });
 

@@ -8,6 +8,7 @@ import { extractAcademicDetails } from '../server/utils/gemini.utils.js';
 // 1. Initialize Telegram Bot
 const token = process.env.TELEGRAM_TOKEN;
 const BACKEND_URL = process.env.BACKEND_URL;
+const FRONTEND_URL = process.env.NEXTJS_BASE_URL;
 const bot = new Bot(token);
 
 bot.on('message', async (ctx) => {
@@ -75,7 +76,7 @@ bot.on('message', async (ctx) => {
         }
       }
 
-      case 'IDLE': {
+      default: {
         const isUrl = /https?:\/\/[^\s]+/.test(text);
 
         if (isUrl) {
@@ -103,8 +104,7 @@ bot.on('message', async (ctx) => {
             if (!serverResponse.ok) throw new Error(data.error);
 
             // 2. Server finished! Send the Next.js Mini App button
-            const baseUrl = process.env.NEXTJS_BASE_URL || 'http://localhost:3000';
-            const reviewUrl = `${baseUrl}/review/${data.applicationId}`;
+            const reviewUrl = `${FRONTEND_URL}/review/${data.applicationId}`;
 
             await ctx.reply(
               "✅ **Draft Complete!**\n\nI have prepared your application based on your Vault. Tap the button below to review and edit.",
@@ -128,8 +128,8 @@ bot.on('message', async (ctx) => {
         return ctx.reply("Send me a valid scholarship link to start applying!");
       }
 
-      default:
-        return ctx.reply("I received your message. Send a scholarship URL to get started.");
+      // default:
+      //   return ctx.reply("I received your message. Send a scholarship URL to get started.");
     }
   } catch (err) {
     console.error('Error handling message:', err);

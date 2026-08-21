@@ -49,7 +49,8 @@ export async function inspectScholarshipPage(url) {
 export async function injectAndSubmit(url, formFields) {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
-  const screenshotPath = `./success_${Date.now()}.png`;
+  const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+  const screenshotPath = `./uploads/success_${timestamp}.png`;
 
   try {
     // 1. Navigate to the scholarship portal

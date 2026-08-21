@@ -1,26 +1,54 @@
-import connectMongo from '@/lib/mongodb';
-import { Application } from '@scholarship-pilot/shared';
-import ReviewForm from './ReviewForm';
+"use client";
 
-// This runs purely on the Node.js server before the page loads
-export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
-  await connectMongo();
+import { useEffect, useState, use } from 'react';
+import ReviewForm, { ApplicationData } from './ReviewForm';
+
+export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   
-  const { id } = await params;
-  // Find the specific application draft using the ID from the URL
-  const appRecord = await Application.findById(id).lean() as any;
+  const [appRecord, setAppRecord] = useState<ApplicationData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!appRecord) {
+  useEffect(() => {
+    const fetchApplication = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/application/${id}`, {
+          headers: {
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
+        if (!response.ok) {
+          throw new Error('Application not found');
+        }
+        const data = await response.json();
+        setAppRecord(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchApplication();
+  }, [id]);
+
+  if (loading) {
     return (
       <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-        <h1>Application Not Found</h1>
-        <p>This draft might have expired or already been submitted.</p>
+        <p>Loading application...</p>
       </div>
     );
   }
 
-  // JSON round-trip strips all MongoDB ObjectIds and special types
-  const serializedData = JSON.parse(JSON.stringify(appRecord));
+  if (error || !appRecord) {
+    return (
+      <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+        <h1>Application Not Found</h1>
+        <p>{error || 'This draft might have expired or already been submitted.'}</p>
+      </div>
+    );
+  }
 
-  return <ReviewForm initialData={serializedData} />;
+  return <ReviewForm initialData={appRecord} />;
 }
